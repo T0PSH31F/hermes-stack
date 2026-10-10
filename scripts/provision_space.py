@@ -79,25 +79,19 @@ def write_summary(text: str) -> None:
 
 
 def create_repo_compat(api: HfApi, *, repo_id: str, repo_type: str, private: bool, exist_ok: bool, extra: dict | None = None) -> str:
-    """Create a repo using the modern huggingface_hub API.
+    """Create a repo using the current huggingface_hub API.
 
-    Current HfApi.create_repo() expects `name` and optional `organization`, not
-    `repo_id`, and for spaces it expects `space_sdk` rather than legacy `sdk`.
+    Modern HfApi.create_repo() expects `repo_id`, not separate `name`/`organization`
+    parameters. For Spaces, it also expects `space_sdk` instead of the legacy `sdk`.
     """
     extra = extra or {}
-    if "/" in repo_id:
-        organization, name = repo_id.split("/", 1)
-    else:
-        organization, name = None, repo_id
 
     kwargs = {
-        "name": name,
+        "repo_id": repo_id,
         "repo_type": repo_type,
         "private": private,
         "exist_ok": exist_ok,
     }
-    if organization:
-        kwargs["organization"] = organization
     if repo_type == "space":
         kwargs["space_sdk"] = extra.get("space_sdk", "docker")
 
