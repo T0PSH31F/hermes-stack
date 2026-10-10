@@ -89,20 +89,21 @@ def create_repo_compat(api: HfApi, *, repo_id: str, repo_type: str, private: boo
             "private": private,
             "exist_ok": exist_ok,
         }
-        kwargs.update(extra)
+        if repo_type == "space" and "space_sdk" in extra:
+            kwargs["space_sdk"] = extra["space_sdk"]
+        kwargs.update({k: v for k, v in extra.items() if k != "space_sdk"})
         return api.create_repo(**kwargs)
     except TypeError:
         legacy = {
-            "name": repo_id,
+            "repo_id": repo_id,
             "repo_type": repo_type,
             "private": private,
             "exist_ok": exist_ok,
         }
-        legacy.update(extra)
-        legacy.pop("space_sdk", None)
         if repo_type == "space":
             legacy.setdefault("sdk", extra.get("space_sdk", "docker"))
             legacy.setdefault("space_hardware", "cpu-basic")
+        legacy.update({k: v for k, v in extra.items() if k not in ("space_sdk", "sdk", "space_hardware")})
         return api.create_repo(**legacy)
 
 
