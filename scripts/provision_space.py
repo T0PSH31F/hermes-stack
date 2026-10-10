@@ -84,7 +84,7 @@ def create_repo_compat(api: HfApi, *, repo_id: str, repo_type: str, private: boo
 
     try:
         kwargs = {
-            "name": repo_id,
+            "repo_id": repo_id,
             "repo_type": repo_type,
             "private": private,
             "exist_ok": exist_ok,
@@ -93,15 +93,14 @@ def create_repo_compat(api: HfApi, *, repo_id: str, repo_type: str, private: boo
         return api.create_repo(**kwargs)
     except TypeError:
         legacy = {
-            "repo_id": repo_id,
+            "name": repo_id,
             "repo_type": repo_type,
             "private": private,
             "exist_ok": exist_ok,
         }
         legacy.update(extra)
-        legacy.pop("name", None)
+        legacy.pop("space_sdk", None)
         if repo_type == "space":
-            legacy.pop("space_sdk", None)
             legacy.setdefault("sdk", extra.get("space_sdk", "docker"))
             legacy.setdefault("space_hardware", "cpu-basic")
         return api.create_repo(**legacy)
