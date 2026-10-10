@@ -78,33 +78,34 @@ def write_summary(text: str) -> None:
             f.write(text)
 
 
-def create_repo_compat(api: HfApi, *, repo_id: str, repo_type: str, private: bool, exist_ok: bool, extra: dict | None = None) -> str:
-    """Create a repo across older/newer huggingface_hub versions."""
-    extra = extra or {}
-
-    try:
-        kwargs = {
-            "repo_id": repo_id,
-            "repo_type": repo_type,
-            "private": private,
-            "exist_ok": exist_ok,
-        }
-        if repo_type == "space" and "space_sdk" in extra:
-            kwargs["space_sdk"] = extra["space_sdk"]
-        kwargs.update({k: v for k, v in extra.items() if k != "space_sdk"})
-        return api.create_repo(**kwargs)
-    except TypeError:
-        legacy = {
-            "repo_id": repo_id,
-            "repo_type": repo_type,
-            "private": private,
-            "exist_ok": exist_ok,
-        }
-        if repo_type == "space":
-            legacy.setdefault("sdk", extra.get("space_sdk", "docker"))
-            legacy.setdefault("space_hardware", "cpu-basic")
-        legacy.update({k: v for k, v in extra.items() if k not in ("space_sdk", "sdk", "space_hardware")})
-        return api.create_repo(**legacy)
+def create_repo_compat(api: HfApi, *, repo_id: str, repo_type: str, private: bool, exist_ok: bool, space_sdk: str | None = None) -> str:
+    """Create a repo using the current HfApi.create_repo() signature.
+    
+    The modern HfApi uses 'name' and 'organization' instead of 'repo_id'.
+    For repo_id='org/name', split it and pass organization='org', name='name'.
+    """
+    if "/" in repo_id:
+        organization, name = repo_id.split("/", 1)
+    else:
+        organization = None
+        name = repo_id
+    
+    kwargs = {
+        "name": name,
+        "private": private,
+        "exist_ok": exist_ok,
+    }
+    
+    if organization:
+        kwargs["organization"] = organization
+    
+    if repo_type != "model":
+        kwargs["repo_type"] = repo_type
+    
+    if repo_type == "space" and space_sdk:
+        kwargs["space_sdk"] = space_sdk
+    
+    return api.create_repo(**kwargs)
 
 
 def main() -> int:
@@ -160,7 +161,7 @@ def main() -> int:
             repo_type="space",
             private=PRIVATE_SPACE,
             exist_ok=True,
-            extra={"space_sdk": "docker"},
+            space_sdk="docker",
         )
         print(f"      -> {url}")
     except Exception as e:
