@@ -78,6 +78,35 @@ def write_summary(text: str) -> None:
             f.write(text)
 
 
+def create_repo_compat(api: HfApi, *, repo_id: str, repo_type: str, private: bool, exist_ok: bool, extra: dict | None = None) -> str:
+    """Create a repo across older/newer huggingface_hub versions."""
+    extra = extra or {}
+
+    try:
+        kwargs = {
+            "name": repo_id,
+            "repo_type": repo_type,
+            "private": private,
+            "exist_ok": exist_ok,
+        }
+        kwargs.update(extra)
+        return api.create_repo(**kwargs)
+    except TypeError:
+        legacy = {
+            "repo_id": repo_id,
+            "repo_type": repo_type,
+            "private": private,
+            "exist_ok": exist_ok,
+        }
+        legacy.update(extra)
+        legacy.pop("name", None)
+        if repo_type == "space":
+            legacy.pop("space_sdk", None)
+            legacy.setdefault("sdk", extra.get("space_sdk", "docker"))
+            legacy.setdefault("space_hardware", "cpu-basic")
+        return api.create_repo(**legacy)
+
+
 def main() -> int:
     hf_user, space_name = check_env()
     repo_id = f"{hf_user}/{space_name}"
@@ -124,19 +153,24 @@ def main() -> int:
 
     # ------------------------------------------------------ create repos
     print(f"[1/5] Creating (or reusing) Space {repo_id} (sdk=docker, cpu-basic, {'private' if PRIVATE_SPACE else 'public'})…")
-    url = api.create_repo(
-        repo_id=repo_id,
-        repo_type="space",
-        sdk="docker",
-        private=PRIVATE_SPACE,
-        exist_ok=True,
-        space_hardware="cpu-basic",
-    )
-    print(f"      -> {url}")
+    try:
+        url = create_repo_compat(
+            api,
+            repo_id=repo_id,
+            repo_type="space",
+            private=PRIVATE_SPACE,
+            exist_ok=True,
+            extra={"space_sdk": "docker"},
+        )
+        print(f"      -> {url}")
+    except Exception as e:
+        print(f"::error:: Failed to create Space '{repo_id}': {e}")
+        print("::error:: Verify HF_TOKEN has write permissions, HF_USERNAME matches the token owner, and HF_SPACE_NAME is valid.")
+        raise
 
     print(f"[1/5] Creating (or reusing) private backup dataset {backup_repo}…")
     try:
-        api.create_repo(repo_id=backup_repo, repo_type="dataset", private=True, exist_ok=True)
+        create_repo_compat(api, repo_id=backup_repo, repo_type="dataset", private=True, exist_ok=True)
         print("      -> backup dataset ready")
     except Exception as e:
         print(f"::warning:: could not create backup dataset: {e}")
